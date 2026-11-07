@@ -1,0 +1,39 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-models/gemini-3.5-flash-lite}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-models/gemini-embedding-2}
+      EMBEDDING_DIMENSIONS: ${EMBEDDING_DIMENSIONS:-768}
+      TAVILY_API_KEY: ${TAVILY_API_KEY:-}
+      JWT_SECRET: ${JWT_SECRET:?Set a private JWT_SECRET}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      TOKEN_BEARER_URL: ${TOKEN_BEARER_URL:-/api/v1/auth/login}
+      ACCESS_TOKEN_EXPIRY_MINS: ${ACCESS_TOKEN_EXPIRY_MINS:-1440}
+      REFRESH_TOKEN_EXPIRY_DAYS: ${REFRESH_TOKEN_EXPIRY_DAYS:-1}
+      PORT: ${PORT:-8000}
+      DATA_DIR: /data
+    ports:
+      - "127.0.0.1:${BACKEND_HOST_PORT:-8000}:${PORT:-8000}"
+    volumes:
+      - "${RESEARCH_DATA_MOUNT:-./backend/data}:/data"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    environment:
+      PORT: ${FRONTEND_PORT:-8501}
+      BACKEND_BASE_URL: http://backend:${PORT:-8000}/api/v1
+      MODEL_NAMES: ${MODEL_NAMES:-["models/gemini-3.5-flash-lite"]}
+    ports:
+      - "127.0.0.1:${FRONTEND_HOST_PORT:-8501}:${FRONTEND_PORT:-8501}"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  rehearsal-data:

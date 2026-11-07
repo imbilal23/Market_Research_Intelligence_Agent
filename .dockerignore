@@ -1,0 +1,23 @@
+# Send only the runtime source and dependency manifests to the builder.
+**
+!backend/
+!backend/requirements.txt
+!backend/app/
+!backend/app/**/
+!backend/app/**/*.py
+!frontend/
+!frontend/requirements.txt
+!frontend/streamlit/
+!frontend/streamlit/*.py
+!frontend/.streamlit/
+!frontend/.streamlit/config.toml
+
+# Keep private runtime files excluded even if a source include is widened.
+**/.env
+**/.env.*
+**/.streamlit/secrets.toml
+**/__pycache__/
+**/*.db
+**/*.db-*
+**/*.pem
+**/*.key
