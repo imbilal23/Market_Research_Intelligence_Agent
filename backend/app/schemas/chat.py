@@ -1,15 +1,26 @@
 import json
-from typing import Any, AsyncGenerator, AsyncIterable
+from typing import Literal, Any, AsyncGenerator, AsyncIterable
 
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 from loguru import logger
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class PromptInput(BaseModel):
     prompt: str
     model_name: str
+    use_documents: bool = True
+    use_web: bool = True
+
+
+class GuestTurn(BaseModel):
+    role: Literal["human", "ai"]
+    content: str
+
+
+class GuestPromptInput(PromptInput):
+    history: list[GuestTurn] = Field(default_factory=list, max_length=8)
 
 
 class Message(BaseModel):

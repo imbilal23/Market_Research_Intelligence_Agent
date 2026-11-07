@@ -171,8 +171,8 @@ Documents:
 - `DELETE /documents/{document_id}` (remove + delete chunks from sqlite-vec)
 
 Chat and streaming:
-- `POST /chat/` (public streaming chat; no tools or memory)
-- `POST /chat/{thread_id}` (authenticated streaming agent with tools + memory)
+- `POST /chat/` (guest streaming chat; accepts the last eight messages for follow-up questions)
+- `POST /chat/{thread_id}` (signed-in chat with saved history; use_documents and use_web select the available tools)
 - `GET /chat/{thread_id}` (retrieve persisted chat history)
 
 API docs:

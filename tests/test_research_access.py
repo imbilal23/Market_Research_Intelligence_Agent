@@ -111,3 +111,31 @@ async def test_authenticated_partial_timeout_event():
     events = [json.loads(line) async for line in response.body_iterator]
     assert [event["type"] for event in events] == ["llm_chunk", "error"]
     assert "diagnostic" not in events[-1]["content"]
+
+@pytest.mark.asyncio
+async def test_disabled_sources_cannot_be_called():
+    from langgraph.checkpoint.memory import InMemorySaver
+    from app.ai.graph.agent import build_retrieval_graph
+    from langchain_core.messages import HumanMessage, ToolMessage
+
+    graph = build_retrieval_graph(InMemorySaver(), "demo", use_documents=False, use_web=False)
+    result = await graph.ainvoke({"messages": [HumanMessage(content="What are the latest prices?")]},
+                                 {"configurable": {"thread_id": "no-sources"}})
+    assert not any(isinstance(m, ToolMessage) for m in result["messages"])
+    assert result["messages"][-1].content
+
+
+def test_guest_followup_uses_recent_turns(client, monkeypatch):
+    from app.services import chat_service
+    from langchain_core.messages import AIMessageChunk
+
+    class ContextModel:
+        async def astream(self, messages):
+            assert [m.type for m in messages] == ["system", "human", "ai", "human"]
+            assert messages[-2].content == "10 dollars."
+            yield AIMessageChunk(content="20 dollars.")
+
+    monkeypatch.setattr(chat_service, "create_model", lambda **kwargs: ContextModel())
+    payload = {"prompt": "And for two?", "model_name": "test", "history": [
+        {"role": "human", "content": "What is the unit price?"}, {"role": "ai", "content": "10 dollars."}]}
+    assert "20 dollars." in client.post("/api/v1/chat/", json=payload).text

@@ -70,8 +70,6 @@ def initialize_state() -> None:
     if "use_web_research" not in st.session_state:
         st.session_state["use_web_research"] = True
 
-    if "research_focus" not in st.session_state:
-        st.session_state["research_focus"] = "Comprehensive Market Dossier"
 
 
 def new_chat():
@@ -142,4 +140,3 @@ def logout_user() -> None:
     st.session_state["model_name"] = MODEL_NAMES[0]
     st.session_state["use_documents"] = True
     st.session_state["use_web_research"] = True
-    st.session_state["research_focus"] = "Comprehensive Market Dossier"

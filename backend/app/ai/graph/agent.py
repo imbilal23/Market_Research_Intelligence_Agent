@@ -72,19 +72,18 @@ class MockMarketResearchChatModel(BaseChatModel):
             route = "tavily" if "latest" in query and "report" not in query else "retrieve_user_documents"
         elif all(r.name == "retrieve_user_documents" for r in results) and (needs_update or not relevant):
             route = "tavily"
+        available = kwargs.get("available_tools", ("retrieve_user_documents", "tavily"))
+        if route and route not in available:
+            route = next(iter(available), None) if not results else None
         if route:
             reply = AIMessage(content="", tool_calls=[{
                 "name": route, "args": {"query": question}, "id": f"call_mr_{len(messages)}",
             }])
         else:
             evidence = "\n\n".join(relevant) or "Insufficient evidence."
-            summary = "Offline evidence summary."
             if len(relevant) > 1:
-                summary += " Compare the dated figures below. Differences in counts alone do not establish which source is correct."
-            reply = AIMessage(content=(
-                f"### Executive Summary\n{summary}\n\n### Market Overview\n{evidence}\n\n"
-                "### Competitors\nSee retrieved evidence for any named competitors."
-            ))
+                evidence += "\n\nThe figures may differ by date or definition."
+            reply = AIMessage(content=evidence)
         return ChatResult(generations=[ChatGeneration(message=reply)])
 
     async def _astream(
@@ -125,7 +124,7 @@ class MockMarketResearchChatModel(BaseChatModel):
         return "mock-market-intelligence-model"
 
     def bind_tools(self, tools: Any, **kwargs: Any) -> Any:
-        return self
+        return self.bind(available_tools=tuple(tool.name for tool in tools))
 
 
 # Known-good Gemini chat model fallbacks, in preference order.
@@ -219,10 +218,13 @@ def create_model(model_name: str, streaming: bool = False) -> BaseChatModel:
     return MockMarketResearchChatModel()
 
 
-def build_retrieval_graph(checkpointer: BaseCheckpointSaver, model_name: str) -> CompiledStateGraph:
+def build_retrieval_graph(checkpointer: BaseCheckpointSaver, model_name: str, *,
+                          use_documents: bool = True, use_web: bool = True) -> CompiledStateGraph:
     """Build a retrieval-augmented ReAct agent graph based on model and checkpointer."""
     model = create_model(model_name=model_name)
-    with_tools = model.bind_tools(tools)
+    allowed = [tool for tool in tools if (use_web if tool.name == "tavily" else use_documents)]
+    answer_only = model.bind_tools([]) if isinstance(model, MockMarketResearchChatModel) else model
+    with_tools = model.bind_tools(allowed) if allowed else answer_only
 
     def research_model(state, runtime):
         # Stop a failed web-only turn before generation can supply remembered figures.
@@ -241,12 +243,12 @@ def build_retrieval_graph(checkpointer: BaseCheckpointSaver, model_name: str) ->
         # Allow one follow-up search to resolve a discrepancy, then synthesize
         # the available evidence and disclose any unanswered part.
         if sum(m.name == "tavily" for m in results) >= 2 or len(results) >= 4:
-            return model
+            return answer_only
         return with_tools
 
     agent = create_react_agent(
         model=research_model,
-        tools=tools,
+        tools=allowed,
         prompt=(
             f"Research date: {datetime.now(UTC).date().isoformat()}. For latest/current "
             "questions, include the current year in the search and check for a newer primary "

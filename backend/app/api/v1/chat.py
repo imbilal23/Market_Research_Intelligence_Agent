@@ -4,14 +4,14 @@ from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 
 from app.core.deps import CurrentUserDep, SessionDep
-from app.schemas.chat import ChatStreamResponse, Message, PromptInput
+from app.schemas.chat import ChatStreamResponse, GuestPromptInput, Message, PromptInput
 from app.services import chat_service
 
 chat_router = APIRouter()
 
 
 @chat_router.post("/")
-async def simple_chat_stream(prompt_input: PromptInput):
+async def simple_chat_stream(prompt_input: GuestPromptInput):
     return StreamingResponse(
         chat_service.simple_chat_stream(prompt_input),
     )

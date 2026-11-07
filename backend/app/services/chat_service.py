@@ -3,7 +3,7 @@ from collections.abc import AsyncGenerator, AsyncIterator
 from uuid import UUID
 
 from fastapi import HTTPException
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 
 from app.ai.graph.agent import build_retrieval_graph, create_model
@@ -11,13 +11,14 @@ from app.ai.prompts.system import MARKET_RESEARCH_PUBLIC_PROMPT
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.thread_service import get_thread
 from app.db.checkpointer import get_checkpointer
-from app.schemas.chat import Message, PromptInput, safe_stream
+from app.schemas.chat import GuestPromptInput, Message, PromptInput, safe_stream
 
 
-def simple_chat_stream(prompt_input: PromptInput) -> AsyncGenerator:
+def simple_chat_stream(prompt_input: GuestPromptInput) -> AsyncGenerator:
     model = create_model(model_name=prompt_input.model_name, streaming=True)
     messages = [
         SystemMessage(content=MARKET_RESEARCH_PUBLIC_PROMPT),
+        *[(HumanMessage if turn.role == "human" else AIMessage)(content=turn.content) for turn in prompt_input.history],
         HumanMessage(content=prompt_input.prompt),
     ]
     return safe_stream(_stream_messages(model, messages))
@@ -37,7 +38,8 @@ async def chat_stream(thread_id: UUID, prompt_input: PromptInput, user_id: UUID,
     await get_thread(thread_id, user_id, session)
     config = RunnableConfig(configurable={"thread_id": str(thread_id), "user_id": str(user_id)})
     checkpointer = await get_checkpointer()
-    graph = build_retrieval_graph(checkpointer, prompt_input.model_name)
+    graph = build_retrieval_graph(checkpointer, prompt_input.model_name,
+                                  use_documents=prompt_input.use_documents, use_web=prompt_input.use_web)
 
     return graph.astream(
         input={"messages": [HumanMessage(content=prompt_input.prompt)], "retry_count": 0},

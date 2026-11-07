@@ -33,13 +33,13 @@ def interface(phase):
     password = os.environ["JOURNEY_PASSWORD"]
     if phase == "upload":
         click("Register")
-        fill("Corporate Email *", email)
+        fill("Email *", email)
         fill("Username *", "analyst5")
         fill("Password *", password)
-        click("Register Analyst")
+        click("Create account")
     else:
         click("Sign In")
-    fill("Corporate Email *", email)
+    fill("Email *", email)
     fill("Password *", password)
     click("Sign In")
     assert app.session_state["user"].is_authenticated
@@ -53,8 +53,8 @@ def interface(phase):
     if phase == "restart":
         assert any(m["role"] == "ai" and FIGURE in m["content"] and NAME in m["content"]
                    for m in thread.messages), "Checkpoint history did not reopen"
-    next(w for w in app.checkbox if "Web" in w.label).uncheck().run()
-    question = ("How many retailers enrolled in the pilot? Cite the uploaded filename and answer briefly."
+    next(w for w in app.checkbox if w.label == "Search the web").uncheck().run()
+    question = ("How many retailers enrolled in the pilot?"
                 if phase == "upload" else "What was twice the enrollment we just discussed? Give the number.")
     app.chat_input(key="market_research_chat_input").set_value(question).run()
     thread = app.session_state["thread"]
@@ -62,6 +62,7 @@ def interface(phase):
     assert thread.messages[-1]["role"] == "ai", "No completed streamed answer"
     answer = thread.messages[-1]["content"]
     assert (FIGURE if phase == "upload" else "946") in answer, answer[:400]
+    assert "Executive Summary" not in answer and len(answer.split()) <= 80, answer[:400]
     assert "'signature':" not in answer
     if phase == "upload":
         assert NAME in answer

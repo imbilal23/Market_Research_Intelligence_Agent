@@ -228,7 +228,7 @@ class TestLLMRouting:
         assert gen.tool_calls, "Expected a tool call on first message"
 
     def test_mock_synthesis_after_tool_message(self):
-        """MockMarketResearchChatModel should synthesize an 8-section response after ToolMessage."""
+        """A single retrieved fact should be quoted directly."""
         from app.ai.graph.agent import MockMarketResearchChatModel
 
         model = MockMarketResearchChatModel()
@@ -238,9 +238,7 @@ class TestLLMRouting:
         ]
         result = model._generate(messages)
         content = result.generations[0].message.content
-        assert "Executive Summary" in content
-        assert "Market Overview" in content
-        assert "Competitors" in content
+        assert content == "EV market grows at 25% CAGR"
 
 
 # ─── 5. End-to-end ingestion + retrieval (mocked Gemini) ──────────────────────
