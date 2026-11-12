@@ -50,6 +50,7 @@ def interface(phase):
         next(b for b in app.button if str(b.key).startswith("select_")).click().run()
     thread = app.session_state["thread"]
     assert [d["file_name"] for d in thread.documents] == [NAME]
+    assert [w.label for w in app.checkbox] == ["Search the web"]
     if phase == "restart":
         assert any(m["role"] == "ai" and FIGURE in m["content"] and NAME in m["content"]
                    for m in thread.messages), "Checkpoint history did not reopen"

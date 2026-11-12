@@ -64,9 +64,6 @@ def initialize_state() -> None:
     if "model_name" not in st.session_state:
         st.session_state["model_name"] = MODEL_NAMES[0]
 
-    if "use_documents" not in st.session_state:
-        st.session_state["use_documents"] = True
-
     if "use_web_research" not in st.session_state:
         st.session_state["use_web_research"] = True
 
@@ -138,5 +135,4 @@ def logout_user() -> None:
     st.session_state["user"] = User()
     st.session_state["thread"] = Thread()
     st.session_state["model_name"] = MODEL_NAMES[0]
-    st.session_state["use_documents"] = True
     st.session_state["use_web_research"] = True

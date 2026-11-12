@@ -63,7 +63,6 @@ def render_knowledge_base_component(thread_id: UUID | None):
 
 def render_research_controls():
     with st.expander("Search options"):
-        st.session_state["use_documents"] = st.checkbox("Search my files", value=st.session_state.get("use_documents", True))
         st.session_state["use_web_research"] = st.checkbox("Search the web", value=st.session_state.get("use_web_research", True))
 
 
@@ -156,7 +155,7 @@ def authenticated_user_chat_interface_component():
                 try:
                     chat_data = {
                         "prompt": prompt_to_execute,
-                        "use_documents": st.session_state["use_documents"],
+                        "use_documents": bool(st.session_state["thread"].documents),
                         "use_web": st.session_state["use_web_research"],
                         "model_name": st.session_state["model_name"],
                     }

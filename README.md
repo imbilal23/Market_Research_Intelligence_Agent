@@ -172,7 +172,7 @@ Documents:
 
 Chat and streaming:
 - `POST /chat/` (guest streaming chat; accepts the last eight messages for follow-up questions)
-- `POST /chat/{thread_id}` (signed-in chat with saved history; use_documents and use_web select the available tools)
+- `POST /chat/{thread_id}` (signed-in chat with saved history; use_documents and use_web select the available tools). The frontend automatically enables file search when the current chat has uploaded files. Search options contains the web-search toggle.
 - `GET /chat/{thread_id}` (retrieve persisted chat history)
 
 API docs:
