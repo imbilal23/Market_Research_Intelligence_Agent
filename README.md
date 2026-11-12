@@ -59,19 +59,21 @@ Normal Compose runs map `./backend/data` to `/data`. Keep that directory for the
 
 ## Railway hosting
 
-The planned deployment uses one Railway project and environment. The browser connects to the public Streamlit domain over HTTPS. Streamlit makes server-side HTTP requests to FastAPI using Railway private DNS. Gemini, Tavily and SQLite belong to the backend.
+The deployment uses one Railway project and environment. The browser connects to the public Streamlit domain over HTTPS. Streamlit makes server-side HTTP requests to FastAPI using Railway private DNS. Gemini, Tavily and SQLite belong to the backend.
 
-### Future GitHub-connected setup
+### GitHub-connected setup
 
-For a future deployment, create two services named exactly `backend` and `frontend` in the same environment. Connect both to the same GitHub repository and branch. Set each service's Root Directory to the repository root (`/`, the default) and select its own **Config File Path** in service settings. These paths start at the repository root. Both Dockerfiles copy files using that build context. [Railway config as code](https://docs.railway.com/config-as-code/reference)
+Connect both services to the same GitHub repository and branch. Set each service's Root Directory to the repository root (`/`, the default). Set `RAILWAY_DOCKERFILE_PATH` separately on each service and configure its health check and restart policy in Railway's service settings. Both Dockerfiles copy files using the repository-root build context. Leave Config File Path empty. [Railway Dockerfile paths](https://docs.railway.com/builds/dockerfiles#custom-dockerfile-path)
+
+The current services are `Market_Research_Intelligence_Agent` and `frontend`. For a fresh installation, the examples below name the backend service `backend`. Match cross-service variable references to the actual backend service name in your project.
 
 | Service setting | backend | frontend |
 |---|---|---|
-| Config File Path | `/backend/railway.json` | `/frontend/railway.json` |
-| Dockerfile selected by that config | `backend/Dockerfile` | `frontend/Dockerfile` |
+| `RAILWAY_DOCKERFILE_PATH` service variable | `backend/Dockerfile` | `frontend/Dockerfile` |
 | Docker image startup (leave Railway start override empty) | `uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}` | `streamlit run streamlit/main.py --server.address=0.0.0.0 --server.port=${PORT:-8501}` |
 | Service variable | `PORT=8000` | `PORT=8501` |
 | Health check | `/health` checks SQLite, checkpoints and sqlite-vec | `/_stcore/health` checks Streamlit |
+| Restart policy | On failure, maximum 10 retries | On failure, maximum 10 retries |
 | Networking | Private network only. Leave public domains and TCP proxies empty. | Generate a public HTTPS domain targeting port 8501. |
 | Storage | Attach one persistent volume at `/data`. Use one replica. | Ephemeral filesystem. |
 
@@ -79,7 +81,7 @@ For a future deployment, create two services named exactly `backend` and `fronte
 
 **Frontend variables.** In Railway set `BACKEND_BASE_URL=http://${{backend.RAILWAY_PRIVATE_DOMAIN}}:${{backend.PORT}}/api/v1` and `MODEL_NAMES=["models/gemini-3.5-flash-lite"]`. The explicit backend PORT above supplies the value for this cross-service reference. Private HTTP is server-to-server. For this new environment the IPv4 listener on 0.0.0.0 uses Railway's private A record. [Railway private domains](https://docs.railway.com/networking/domains/working-with-domains)
 
-After a future authorized deployment, check the frontend domain, reach backend health from the frontend service, then verify upload, retrieval and history after backend replacement on its volume. Local Compose exposes the API on loopback for development.
+After deployment, check the frontend domain, reach backend health from the frontend service, then verify upload, retrieval and history after backend replacement on its volume. Local Compose exposes the API on loopback for development.
 ## Local development
 
 Run these commands from the project root. Create the environment once on a fresh checkout, then follow the configuration instructions above.
