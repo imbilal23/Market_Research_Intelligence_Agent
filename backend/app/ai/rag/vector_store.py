@@ -1,4 +1,5 @@
 import json
+import re
 import sqlite3
 import time
 import uuid
@@ -16,6 +17,7 @@ from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 from langchain_core.vectorstores import VectorStore
 from loguru import logger
+from starlette.concurrency import run_in_threadpool
 
 from app.core.config import settings
 
@@ -38,7 +40,7 @@ def _make_gemini_embeddings(task_type: str) -> "GoogleGenerativeAIEmbeddings":  
         google_api_key=SecretStr(raw_key),
         task_type=task_type,
         output_dimensionality=settings.embedding_dimensions,
-        request_options={"timeout": 120},
+        client_args={"timeout": 120},
     )
 
 
@@ -64,14 +66,19 @@ class GeminiDualTaskEmbeddings(Embeddings):
                 return embedder.embed_documents(texts)
             except Exception as e:
                 err_str = str(e).lower()
-                is_rate_limit = any(kw in err_str for kw in ("resource_exhausted", "quota", "rate", "429"))
+                is_rate_limit = any(kw in err_str for kw in ("resource_exhausted", "quota", "rate limit", "429"))
                 is_transient = any(kw in err_str for kw in ("unavailable", "503", "timeout", "connection"))
 
                 if attempt < self.MAX_RETRIES and (is_rate_limit or is_transient):
                     wait = 2 ** attempt * (5 if is_rate_limit else 2)
+                    retry_hint = re.search(r"(?:retrydelay[\"']?\s*:\s*[\"']?|retry in\s+)(\d+(?:\.\d+)?)s", err_str)
+                    if retry_hint:
+                        wait = max(wait, float(retry_hint.group(1)) + 1)
+                    if wait > 120:
+                        raise
                     logger.warning(
                         f"Gemini embedding {'rate limited' if is_rate_limit else 'transient error'} "
-                        f"(attempt {attempt + 1}/{self.MAX_RETRIES}). Retrying in {wait}s. Error: {e}"
+                        f"(attempt {attempt + 1}/{self.MAX_RETRIES}). Retrying in {wait}s."
                     )
                     time.sleep(wait)
                 elif "api_key" in err_str or "invalid_argument" in err_str:
@@ -293,6 +300,8 @@ class SQLiteVectorStore(VectorStore):
             metadatas = [{} for _ in text_list]
 
         embeddings_list = self._embeddings_instance.embed_documents(text_list)
+        if len(embeddings_list) != len(text_list):
+            raise RuntimeError("The embedding service returned an incomplete result. Please retry.")
 
         with self._get_connection() as conn:
             for text, meta, doc_id, emb in zip(text_list, metadatas, ids, embeddings_list):
@@ -331,7 +340,7 @@ class SQLiteVectorStore(VectorStore):
         ids: Optional[list[str]] = None,
         **kwargs: Any,
     ) -> list[str]:
-        return self.add_texts(texts, metadatas=metadatas, ids=ids, **kwargs)
+        return await run_in_threadpool(self.add_texts, texts, metadatas=metadatas, ids=ids, **kwargs)
 
     async def aadd_documents(self, documents: list[Document], ids: Optional[list[str]] = None, **kwargs: Any) -> list[str]:
         texts = [doc.page_content for doc in documents]
@@ -408,7 +417,7 @@ class SQLiteVectorStore(VectorStore):
         filter: Optional[dict] = None,
         **kwargs: Any,
     ) -> list[Document]:
-        return self.similarity_search(query, k=k, filter=filter, **kwargs)
+        return await run_in_threadpool(self.similarity_search, query, k=k, filter=filter, **kwargs)
 
     def delete(self, ids: Optional[list[str]] = None, **kwargs: Any) -> Optional[bool]:
         if not ids:
@@ -421,7 +430,7 @@ class SQLiteVectorStore(VectorStore):
         return True
 
     async def adelete(self, ids: Optional[list[str]] = None, **kwargs: Any) -> Optional[bool]:
-        return self.delete(ids=ids, **kwargs)
+        return await run_in_threadpool(self.delete, ids=ids, **kwargs)
 
     @classmethod
     def from_texts(
@@ -489,6 +498,8 @@ async def index_document_to_vectorstore(
     display_name = file_name or file_path.name
     logger.info(f"Starting indexing for document: {file_path} (name: {display_name}) with document_id: {document_id}")
     splits = await _load_and_split_documents(file_path)
+    if not splits:
+        raise ValueError("The file contains no readable text.")
     for split in splits:
         split.metadata["id"] = str(uuid.uuid4())
         split.metadata["file_name"] = display_name

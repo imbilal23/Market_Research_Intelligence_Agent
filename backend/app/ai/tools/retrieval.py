@@ -7,6 +7,7 @@ from loguru import logger
 
 from app.ai.rag.vector_store import vector_store
 from app.core.config import settings
+from app.core.provider_errors import provider_error_message
 
 
 WEB_UNAVAILABLE = "Web evidence unavailable. No external sources were retrieved for this search."
@@ -66,14 +67,16 @@ async def retrieve_user_documents(query: str, config: RunnableConfig) -> str:
         formatted_chunks = []
         for i, doc in enumerate(result_docs, start=1):
             file_name = doc.metadata.get("file_name", "Uploaded Document")
+            page = doc.metadata.get("page")
+            source = f"{file_name}, PDF page {page + 1}" if isinstance(page, int) else file_name
             formatted_chunks.append(
-                f"[Evidence Chunk {i} | Source: {file_name}]\n{doc.page_content.strip()}"
+                f"[Evidence Chunk {i} | Source: {source}]\n{doc.page_content.strip()}"
             )
 
         return "\n\n".join(formatted_chunks)
     except Exception as e:
-        logger.error(f"Error during document retrieval: {e}")
-        return f"Error searching uploaded documents: {str(e)}"
+        logger.error("Document retrieval failed ({})", type(e).__name__)
+        return provider_error_message(e, "Your files could not be searched. Please try again.")
 
 
 tools = [retrieve_user_documents, tavily]

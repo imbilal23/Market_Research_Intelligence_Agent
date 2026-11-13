@@ -5,6 +5,7 @@ from uuid import UUID, uuid4
 
 from fastapi import HTTPException, UploadFile, status
 from loguru import logger
+from starlette.concurrency import run_in_threadpool
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,6 +16,7 @@ from app.ai.rag.vector_store import (
     search_documents_in_vectorstore,
 )
 from app.core.config import settings
+from app.core.provider_errors import provider_error_message
 from app.db.models import Document
 from app.schemas.documents import DocumentCreate
 from app.services.thread_service import get_thread
@@ -51,7 +53,7 @@ async def upload_and_index_document(
 
     allowed_extensions = list(DOCUMENT_LOADER_MAPPING.keys())
     message = f"Unsupported file type. Allowed types: {', '.join(allowed_extensions)}"
-    if Path(file.filename).suffix not in allowed_extensions:
+    if Path(file.filename).suffix.lower() not in allowed_extensions:
         logger.error(message)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message)
 
@@ -66,11 +68,8 @@ async def upload_and_index_document(
     chunk_ids = []
     try:
         with open(persistent_file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+            await run_in_threadpool(shutil.copyfileobj, file.file, buffer)
         logger.info(f"File '{file.filename}' stored persistently at '{persistent_file_path}'.")
-
-        document_data = DocumentCreate(id=document_id, file_name=file.filename, thread_id=thread_id)
-        new_document = await insert_document(document_data, session)
 
         chunk_ids = await index_document_to_vectorstore(
             persistent_file_path,
@@ -79,11 +78,15 @@ async def upload_and_index_document(
             user_id,
             file_name=file.filename,
         )
+        await get_thread(thread_id, user_id, session)
+        document_data = DocumentCreate(id=document_id, file_name=file.filename, thread_id=thread_id)
+        await insert_document(document_data, session)
         logger.info(f"File '{file.filename}' (document_id: {document_id}) indexed to VectorStore ({len(chunk_ids)} chunks).")
 
         return {"document_id": document_id, "message": f"File {file.filename} uploaded, persisted, and indexed successfully."}
     except Exception as e:
-        logger.error(f"An unexpected error occurred during upload of '{file.filename}': {e}", exc_info=True)
+        logger.error("Document upload failed ({})", type(e).__name__)
+        await session.rollback()
         # Cleanup persistent file on error
         if persistent_file_path.exists():
             try:
@@ -106,7 +109,7 @@ async def upload_and_index_document(
 
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Document indexing failed. Check the document and retry.",
+            detail=provider_error_message(e, "We could not process this file. Check that it contains readable text and try again."),
         )
 
 

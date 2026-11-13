@@ -82,6 +82,14 @@ The current services are `Market_Research_Intelligence_Agent` and `frontend`. Fo
 **Frontend variables.** In Railway set `BACKEND_BASE_URL=http://${{backend.RAILWAY_PRIVATE_DOMAIN}}:${{backend.PORT}}/api/v1` and `MODEL_NAMES=["models/gemini-3.5-flash-lite"]`. The explicit backend PORT above supplies the value for this cross-service reference. Private HTTP is server-to-server. For this new environment the IPv4 listener on 0.0.0.0 uses Railway's private A record. [Railway private domains](https://docs.railway.com/networking/domains/working-with-domains)
 
 After deployment, check the frontend domain, reach backend health from the frontend service, then verify upload, retrieval and history after backend replacement on its volume. Local Compose exposes the API on loopback for development.
+## Uploading reports
+
+Choose a PDF, Word document or text file, then select **Add files to chat**. Large reports can take several minutes while Gemini prepares the searchable passages. The app allows up to 30 minutes for an upload response and displays the file in the chat after indexing succeeds. If a timeout occurs, reopen the chat and check its files before uploading another copy.
+
+Indexing runs in a worker thread so other API requests can continue. Gemini retries respect the provider's suggested delay, with bounded attempts. Chat streams send keep-alive events during long searches or model responses. Usage-limit errors identify the provider limit in the UI. Actual throughput depends on the Gemini project's quota. [Gemini rate limits](https://ai.google.dev/gemini-api/docs/rate-limits)
+
+For an assessment restricted to an uploaded report, state that restriction in your question. You can also turn off **Search the web**. Report evidence includes filenames and PDF page numbers for checking the answer.
+
 ## Local development
 
 Run these commands from the project root. Create the environment once on a fresh checkout, then follow the configuration instructions above.

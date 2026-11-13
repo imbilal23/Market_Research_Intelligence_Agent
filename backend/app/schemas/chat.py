@@ -1,10 +1,15 @@
+import asyncio
 import json
+from contextlib import suppress
 from typing import Literal, Any, AsyncGenerator, AsyncIterable
 
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 from loguru import logger
 from pydantic import BaseModel, Field
+from app.core.provider_errors import provider_error_message
+
+STREAM_HEARTBEAT_SECONDS = 10
 
 
 class PromptInput(BaseModel):
@@ -29,12 +34,33 @@ class Message(BaseModel):
 
 
 async def safe_stream(events):
+    iterator = aiter(events)
+    pending = None
     try:
-        async for event in events:
+        while True:
+            if pending is None:
+                pending = asyncio.ensure_future(anext(iterator))
+            done, _ = await asyncio.wait({pending}, timeout=STREAM_HEARTBEAT_SECONDS)
+            if not done:
+                yield json.dumps({"type": "heartbeat"}) + "\n"
+                continue
+            try:
+                event = pending.result()
+            except StopAsyncIteration:
+                return
+            pending = None
             yield event
     except Exception as exc:
         logger.warning("Research stream interrupted ({})", type(exc).__name__)
-        yield json.dumps({"type": "error", "content": "Research interrupted. Please retry."}) + "\n"
+        message = provider_error_message(exc, "The answer was interrupted. Please try again.")
+        yield json.dumps({"type": "error", "content": message}) + "\n"
+    finally:
+        if pending is not None:
+            pending.cancel()
+            with suppress(asyncio.CancelledError, Exception):
+                await pending
+        if hasattr(iterator, "aclose"):
+            await iterator.aclose()
 
 
 class ChatStreamResponse(StreamingResponse):

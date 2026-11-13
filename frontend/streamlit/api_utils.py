@@ -12,6 +12,8 @@ except ImportError:
     from config import settings, resolve_backend_url
 
 TIMEOUT = 30
+UPLOAD_TIMEOUT = (10, 1800)
+CHAT_TIMEOUT = httpx.Timeout(TIMEOUT, read=120)
 
 
 def _base_url() -> str:
@@ -130,7 +132,7 @@ async def simple_chat_stream(chat_data: dict):
     Yields:
         str: Text chunks from the stream
     """
-    async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+    async with httpx.AsyncClient(timeout=CHAT_TIMEOUT) as client:
         try:
             async with client.stream("POST", f"{_base_url()}/chat/", json=chat_data) as response:
                 response.raise_for_status()
@@ -163,7 +165,7 @@ async def chat_stream(chat_data: dict, thread_id: UUID):
     headers = {
         "Authorization": f"Bearer {st.session_state['user'].access_token}",
     }
-    async with httpx.AsyncClient(timeout=TIMEOUT, headers=headers) as client:
+    async with httpx.AsyncClient(timeout=CHAT_TIMEOUT, headers=headers) as client:
         try:
             async with client.stream("POST", f"{_base_url()}/chat/{thread_id}", json=chat_data) as response:
                 response.raise_for_status()
@@ -405,17 +407,23 @@ def upload_document(thread_id: UUID, file: UploadedFile) -> dict | None:
         files = {"file": (file.name, file.getvalue(), file.type)}
 
         response = requests.post(
-            f"{_base_url()}/documents/upload/{thread_id}", files=files, headers=headers, timeout=TIMEOUT
+            f"{_base_url()}/documents/upload/{thread_id}", files=files, headers=headers, timeout=UPLOAD_TIMEOUT
         )
         response.raise_for_status()
 
         logger.info(f"Successfully uploaded file: {file.name}")
         return response.json()
     except requests.exceptions.HTTPError as e:
-        logger.error(f"Upload failed with status {e.response.status_code}. Response: {e.response.text}")
-        if e.response.status_code in [400, 401]:
-            return e.response.json()
-        return {}
+        logger.error(f"Upload failed with status {e.response.status_code}.")
+        try:
+            detail = e.response.json().get("detail")
+            if isinstance(detail, str):
+                return {"detail": detail}
+        except ValueError:
+            pass
+        return {"detail": "The file could not be added. Please try again."}
+    except requests.exceptions.Timeout:
+        return {"detail": "Preparing this file is taking longer than expected. Reopen this chat to check whether it finished before uploading it again."}
     except requests.exceptions.RequestException as e:
         logger.error(f"File upload failed with RequestError: {str(e)}")
         return None

@@ -34,15 +34,20 @@ def render_knowledge_base_component(thread_id: UUID | None):
                     update_user_threads()
 
             if thread_id:
+                upload_failed = False
+                st.caption("Large reports can take several minutes to prepare. Please wait for this step to finish.")
                 for file in uploaded_files:
-                    with st.spinner(f"Reading {file.name}..."):
+                    with st.spinner(f"Preparing {file.name}..."):
                         resp = api_utils.upload_document(thread_id, file)
                         if resp and resp.get("document_id"):
                             st.success(f"Ready to use: {file.name}")
                         else:
-                            st.error(f"Could not read: {file.name}")
+                            upload_failed = True
+                            detail = (resp or {}).get("detail", "Please try again.")
+                            st.error(f"Could not add {file.name}. {detail}")
                 update_document_list(thread_id)
-                st.rerun()
+                if not upload_failed:
+                    st.rerun()
 
         # Display current uploaded documents
         docs = st.session_state["thread"].documents
@@ -149,9 +154,10 @@ def authenticated_user_chat_interface_component():
             evidence_container = st.container()
             response_container = st.empty()
             full_response = ""
+            stream_error = "The answer was interrupted. Please try again."
 
             async def fetch_stream():
-                nonlocal full_response
+                nonlocal full_response, stream_error
                 try:
                     chat_data = {
                         "prompt": prompt_to_execute,
@@ -165,7 +171,10 @@ def authenticated_user_chat_interface_component():
                             event_type = event.get("type")
 
                             if event_type == "error":
+                                stream_error = event.get("content", stream_error)
                                 return False
+                            if event_type == "heartbeat":
+                                continue
                             if event_type == "tool_call":
                                 with evidence_container:
                                     tool_name = event.get("name", "tool")
@@ -206,7 +215,7 @@ def authenticated_user_chat_interface_component():
                 completed = asyncio.run(fetch_stream())
             if completed:
                 st.rerun()
-            st.error("The answer was interrupted. Your chat is saved. Please try again.")
+            st.error(stream_error)
 
 def unauthenticated_user_chat_interface_component():
     starter = starter_question(["What is market share?", "How do I compare prices?", "How do I find my competitors?"])
@@ -226,9 +235,10 @@ def unauthenticated_user_chat_interface_component():
         with st.chat_message("ai"):
             placeholder = st.empty()
             full_response = ""
+            stream_error = "The answer was interrupted. Please try again."
 
             async def fetch_stream():
-                nonlocal full_response
+                nonlocal full_response, stream_error
                 try:
                     chat_data = {"prompt": selected_query, "model_name": st.session_state["model_name"],
                                  "history": st.session_state["thread"].messages[-9:-1]}
@@ -236,7 +246,10 @@ def unauthenticated_user_chat_interface_component():
                         try:
                             event = json.loads(line)
                             if event.get("type") == "error":
+                                stream_error = event.get("content", stream_error)
                                 return False
+                            if event.get("type") == "heartbeat":
+                                continue
                             chunk = event.get("content", "")
                             full_response += chunk
                             placeholder.markdown(full_response + "▌")
@@ -254,4 +267,4 @@ def unauthenticated_user_chat_interface_component():
             with st.spinner("Working on your answer..."):
                 if asyncio.run(fetch_stream()):
                     st.rerun()
-                st.error("The answer was interrupted. Please retry.")
+                st.error(stream_error)

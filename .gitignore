@@ -215,6 +215,8 @@ uploads/
 /docs/
 /progess.md
 /progress.md
+# Local report inputs used for manual validation
+/*.pdf
 /*_report.md
 /.idea/
 *.code-workspace
