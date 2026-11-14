@@ -44,8 +44,6 @@ assessment. Source references help users check the findings and pursue gaps.
   instructed to distinguish reported facts, forecasts, and business inferences.
 - **Conversational memory** preserves signed-in research threads so users can
   revisit findings and ask follow-up questions.
-- **Flexible responses** adapt the level of detail and presentation to the request,
-  including concise answers, comparisons, tables, and longer research summaries.
 
 File search becomes available automatically when files have been added successfully
 to the current chat. **Search the web** is a user-controlled option, enabled by
@@ -126,28 +124,6 @@ SQLite checkpoints.
 | Docker & Railway | Separate containerized services and persistent backend storage |
 | pytest & Streamlit AppTest | Backend regression tests and frontend interaction checks |
 
-## Example Use Cases
-
-### Assess a market-entry opportunity
-
-A startup considering EV services in Southeast Asia uploads an industry report
-and compares Thailand, Vietnam, and Indonesia. It asks for a market comparison,
-infrastructure barriers, and a preliminary view of charging, maintenance, and
-battery-service opportunities, with evidence separated from business assumptions.
-
-### Compare competitors before positioning a product
-
-A software team investigates competing products in a defined market. With web
-search enabled, it asks for a comparison of published offerings, pricing, and
-target customers, then follows up on possible gaps that deserve customer research.
-
-### Screen an investment environment
-
-A manufacturing SME uploads a dated economic report and asks about growth,
-inflation, trade conditions, energy costs, and financing constraints. It requests
-a risk matrix and the checks needed before a detailed feasibility study, keeping
-historical observations and forecasts tied to the report's time period.
-
 ## Engineering Highlights
 
 - **Streaming and responsiveness** deliver answers incrementally. Keep-alive
@@ -188,5 +164,3 @@ historical observations and forecasts tied to the report's time period.
   storage. Higher concurrency and additional backend replicas require validation.
 
 ---
-
-Released under the [MIT License](LICENSE).
